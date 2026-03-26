@@ -23,8 +23,13 @@ STATE_FILE = "processed_ids.json"
 def load_processed_ids():
     # If the state file exists, read it and return a set of processed IDs
     if Path(STATE_FILE).exists():
-        with open(STATE_FILE, 'r') as f: 
-            return set(json.load(f))
+        try:
+            with open(STATE_FILE, 'r') as f: 
+                return set(json.load(f))
+        except json.JSONDecodeError:
+            # If the file is empty or corrupted, warn the user and start fresh
+            logger.warning(f"File {STATE_FILE} is corrupted or empty. Starting fresh.")
+            return set()
     # Otherwise, return an empty set
     return set()
 
@@ -36,7 +41,6 @@ def save_processed_ids(ids_set):
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--drive-folder", type=str, default=None)
-    # 2. Default to None. The program will not save locally unless specified.
     parser.add_argument("--output-folder", type=str, default=None, help="Local directory to save charts.")
     parser.add_argument("--input-json", type=str, default=None)
     parser.add_argument("--run-once", action="store_true")
@@ -48,57 +52,59 @@ def process_single_target(obs, args, drive_folder_cache):
     obs_id = obs.get('id')
     s_name = str(obs.get('object_name', 'Unknown')).replace(' ', '_')
     ra, dec = obs.get('ra'), obs.get('dec')
-    start_time_str = obs.get('start_time')
     instrument = obs.get('instrument', 'GOODMAN')
 
     # Skip this target if critical data is missing
-    if ra is None or dec is None or start_time_str is None: 
+    if ra is None or dec is None or not obs.get('windows'): 
         return None
 
-    # --- THIS BLOCK CALCULATES THE NIGHT FOLDER AND WAS LIKELY MISSING ---
-    try:
-        # Clean the time string (remove T, Z, and milliseconds)
-        clean_time_str = start_time_str.replace('T', ' ').replace('Z', '').split('+')[0].split('.')[0]
-        # Subtract 12 hours to calculate the "Astronomical Night"
-        night_date = (datetime.strptime(clean_time_str, '%Y-%m-%d %H:%M:%S') - timedelta(hours=12)).strftime('%Y-%m-%d')
-        night_folder_name = f"Night_{night_date}"
-    except Exception:
-        # Fallback if time parsing fails
-        night_folder_name = "Night_Unknown"
+    # Calculate all applicable Astronomical Nights based on the windows
+    target_nights = set()
+    for w in obs.get('windows', []):
+        start_time_str = w.get('start')
+        if not start_time_str: continue
+        try:
+            # Clean the time string (remove T, Z, and milliseconds)
+            clean_time_str = start_time_str.replace('T', ' ').replace('Z', '').split('+')[0].split('.')[0]
+            # Subtract 12 hours to calculate the "Astronomical Night"
+            night_date = (datetime.strptime(clean_time_str, '%Y-%m-%d %H:%M:%S') - timedelta(hours=12)).strftime('%Y-%m-%d')
+            target_nights.add(f"Night_{night_date}")
+        except Exception:
+            pass
+            
+    if not target_nights:
+        target_nights.add("Night_Unknown")
 
-    # Handle folder creation only if an output folder was explicitly requested
+    # Handle local folder creation for all nights
+    output_dirs = []
     if args.output_folder:
-        local_night_folder = Path(args.output_folder) / night_folder_name
-        local_night_folder.mkdir(parents=True, exist_ok=True) # Creates folder if it doesn't exist
-        output_dir_str = str(local_night_folder)
-    else:
-        local_night_folder = None
-        output_dir_str = None
+        for night in target_nights:
+            local_night_folder = Path(args.output_folder) / night
+            local_night_folder.mkdir(parents=True, exist_ok=True)
+            output_dirs.append(str(local_night_folder))
 
-    current_drive_folder_id = drive_folder_cache.get(night_folder_name) if args.drive_folder else None
+    # Handle Drive folder ID assignment for all nights
+    drive_ids = []
+    if args.drive_folder:
+        for night in target_nights:
+            if night in drive_folder_cache:
+                drive_ids.append(drive_folder_cache[night])
     
     raw_pa = obs.get('pa', 0.0)
     is_parallactic = str(raw_pa).lower() in ["para", "parallactic", "paralactico"]
     pa_value = 0.0 if is_parallactic else float(raw_pa)
     clean_inst = str(instrument).upper().replace(' ', '').replace('4.1', '')
     
-    file_prefix = f"{s_name}_{clean_inst}_FOV"
-    file_suffix = f"_PA{'PARA' if is_parallactic else pa_value}.pdf"
-    
-    if local_night_folder:
-        if list(local_night_folder.glob(f"{file_prefix}*{file_suffix}")):
-            logger.info(f"Skipping '{s_name}': Exists locally.")
-            return obs_id
-    
-    logger.info(f"Generating chart: {s_name} (Inst: {instrument}, Night: {night_folder_name})")
+    logger.info(f"Generating chart: {s_name} (Inst: {instrument}, Nights: {', '.join(target_nights)})")
     try:
         finder.run_pipeline(
             s_name=s_name, ra_str=str(ra), dec_str=str(dec), pa_deg=pa_value,
             instrument=instrument,
             imsize=float(obs.get('fov', 3.0)), radius=1.0, contrast=float(obs.get('contrast', 0.045)),
             slit_width=float(obs.get('slit', 1.0)), 
-            output_folder=output_dir_str, # Will be None if not requested
-            drive_folder=current_drive_folder_id, is_parallactic=is_parallactic 
+            output_folders=output_dirs,
+            drive_folders=drive_ids,
+            is_parallactic=is_parallactic 
         )
         return obs_id
     except Exception as e:
@@ -145,14 +151,20 @@ def process_batch(args):
         batch_filenames.add(target_sig)
         unique_targets.append(obs)
 
-        start_time_str = obs.get('start_time')
-        if not start_time_str: continue
-        try:
-            # Calculate night exactly as in process_single_target
-            clean_time_str = start_time_str.replace('T', ' ').replace('Z', '').split('+')[0].split('.')[0]
-            night_date = (datetime.strptime(clean_time_str, '%Y-%m-%d %H:%M:%S') - timedelta(hours=12)).strftime('%Y-%m-%d')
-            unique_nights.add(f"Night_{night_date}")
-        except Exception:
+        # Loop through all windows to find applicable nights
+        for w in obs.get('windows', []):
+            start_time_str = w.get('start')
+            if not start_time_str: continue
+            try:
+                # Calculate night exactly as in process_single_target
+                clean_time_str = start_time_str.replace('T', ' ').replace('Z', '').split('+')[0].split('.')[0]
+                night_date = (datetime.strptime(clean_time_str, '%Y-%m-%d %H:%M:%S') - timedelta(hours=12)).strftime('%Y-%m-%d')
+                unique_nights.add(f"Night_{night_date}")
+            except Exception:
+                pass
+        
+        # If no valid windows were found, assign to Unknown
+        if not obs.get('windows'):
             unique_nights.add("Night_Unknown")
     
     # If Drive is enabled, synchronously create/fetch all required folders first        
@@ -219,7 +231,7 @@ def parse_txt_observations(filepath):
                 except ValueError: 
                     pa_value = 0.0 # Default to 0 if parsing fails
                     
-        # Create a dummy start time for right now so it saves in tonight's folder
+        # Create a dummy window for right now so it saves in tonight's folder
         dummy_time = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
         
         # Append to our list exactly how the API would format it
@@ -231,7 +243,7 @@ def parse_txt_observations(filepath):
             "pa": pa_value,
             "instrument": "GOODMAN", # Default instrument
             "fov": 3.0,              # Default FOV
-            "start_time": dummy_time
+            "windows": [{"start": dummy_time, "end": dummy_time}]
         })
         
     logger.info(f"Successfully parsed {len(targets)} targets from {filepath}")

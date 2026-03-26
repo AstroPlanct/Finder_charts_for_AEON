@@ -104,7 +104,6 @@ def manage_cache_size(cache_dir="./fits_cache", max_size_gb=3.0):
                 if entry.is_file():
                     stat = entry.stat()
                     size = stat.st_size
-                    # Guardamos la ruta, tamaño y fecha de modificación
                     files.append((entry.path, size, stat.st_mtime))
                     total_size += size
     except Exception as e:
@@ -152,7 +151,7 @@ def fetch_fits_cached(url, cache_dir="./fits_cache"):
         return fits.open(cache_file)
         
     session = get_http_session()
-    response = session.get(url, timeout=30)
+    response = session.get(url, timeout=60)
     
     # Validate the response
     if response is None or response.status_code != 200: return None
@@ -226,7 +225,7 @@ def get_image_ps1(ra, dec, s_name, imsize=6):
 def get_image_ls(ra, dec, s_name, imsize=6):
     # Fetch NOIRLab Legacy Survey image tile
     numpix = math.ceil(60 * imsize / 0.26)
-    url = f"http://legacysurvey.org/viewer/fits-cutout/?ra={ra}&dec={dec}&layer=dr8&pixscale=0.26&bands=r&size={numpix}"
+    url = f"https://legacysurvey.org/viewer/fits-cutout/?ra={ra}&dec={dec}&layer=dr8&pixscale=0.26&bands=r&size={numpix}"
     hdu = fetch_fits_cached(url)
     if not hdu or len(hdu) == 0: return ''
     return populate_header(hdu, 'LS', 0.26, imsize, s_name, ra, dec, numpix)
@@ -234,14 +233,14 @@ def get_image_ls(ra, dec, s_name, imsize=6):
 def get_image_decaps(ra, dec, s_name, imsize=6):
     # Fetch DECaPS image tile
     numpix = math.ceil(60 * imsize / 0.26)
-    url = f"http://legacysurvey.org/viewer/fits-cutout/?layer=decaps2&ra={ra}&dec={dec}&pixscale=0.26&bands=r&size={numpix}"
+    url = f"https://legacysurvey.org/viewer/fits-cutout/?layer=decaps2&ra={ra}&dec={dec}&pixscale=0.26&bands=r&size={numpix}"
     hdu = fetch_fits_cached(url)
     if not hdu or len(hdu) == 0: return ''
     return populate_header(hdu, 'LS', 0.26, imsize, s_name, ra, dec, numpix)
 
 def get_image_dss(ra, dec, s_name, imsize=6):
     # Fetch Digitized Sky Survey (DSS) image tile as a final fallback
-    url = f"http://archive.stsci.edu/cgi-bin/dss_search?v=poss2ukstu_red&r={ra}&dec={dec}&h={imsize}&w={imsize}&e=J2000"
+    url = f"https://archive.stsci.edu/cgi-bin/dss_search?v=poss2ukstu_red&r={ra}&dec={dec}&h={imsize}&w={imsize}&e=J2000"
     hdu = fetch_fits_cached(url)
     if not hdu or len(hdu) == 0: return ''
     return populate_header(hdu, 'DSS', imsize * 60 / len(hdu[0].data), imsize, s_name, ra, dec, len(hdu[0].data))

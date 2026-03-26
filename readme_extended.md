@@ -5,28 +5,62 @@ The primary objective of this project is to provide an enterprise-grade, fully a
 
 ## 2. Scope
 This software bridges the gap between observation scheduling and telescope operations. Its scope covers:
-* **Data Ingestion:** Automatically fetching the next 30 days of approved observations via the LCO/AEON API portal, or parsing local user-provided `.json` and `.txt`/`.dat` files. 
+* **Data Ingestion:** Automatically fetching approved observations via the LCO/AEON API portal, or parsing local user-provided `.json` and `.txt`/`.dat` files. 
 * **Astrometric Analysis:** Automatically querying optical and near-infrared databases (Gaia DR3, Pan-STARRS, Legacy Survey, 2MASS) to find optimal guiding stars.
-* **Image Processing & Rendering:** Downloading astrometric FITS images, reprojecting them to account for Position Angle (PA) rotations, and generating publication-ready PDFs with accurate WCS coordinate grids, dual coordinate displays (Degrees and HMS/DMS), and instrument slit overlays.
-***Cloud Delivery:** Synchronously managing Google Drive directories to organize outputs by `Night_YYYY-MM-DD` and securely uploading the final charts.
+* **Image Processing & Rendering:** Downloading astrometric FITS images, reprojecting them to account for Position Angle (PA) rotations, and generating publication-ready PDFs with accurate WCS coordinate grids and instrument slit overlays.
+* **Cloud Delivery:** Synchronously managing Google Drive directories to organize outputs and securely upload final charts.
 
-## 3. Core Strengths
-***Extreme Network Resiliency:** Implements exponential backoff (`@retry_with_backoff`) for unstable astronomical databases. If Gaia DR3 is down or lacks coverage, it gracefully falls back to Pan-STARRS, then to the Legacy Survey, ensuring a chart is always generated.
-***Multiprocessing Architecture:** Utilizes Python's `ProcessPoolExecutor` to render multiple FITS images and PDFs simultaneously. This circumvents Python's GIL and Matplotlib's thread-locking issues, drastically reducing batch processing times.
-***Memory-Safe Daemon Mode:** Built to run infinitely. It uses Matplotlib's headless 'Agg' backend and forces explicit garbage collection (`fig.clf()`, `plt.close('all')`) to completely eliminate memory leaks during 24/7 server operations.
-***Thread-Safe Google Drive Integration:** Features a robust Singleton pattern for Google API credentials to avoid rate limits. It utilizes synchronous pre-processing to eliminate race conditions when creating dynamic Night folders.
+## 3. Core Strengths & Architecture
+* **Extreme Network Resiliency:** Implements exponential backoff (`@retry_with_backoff`) for unstable astronomical databases. If Gaia DR3 is down, it gracefully falls back to Pan-STARRS, then to the Legacy Survey.
+* **Multiprocessing Engine:** Utilizes Python's `ProcessPoolExecutor` to circumvent the Global Interpreter Lock (GIL) and Matplotlib's thread-locking issues, rendering multiple PDFs simultaneously.
+* **Memory-Safe Daemon:** Built to run infinitely. It forces explicit garbage collection to eliminate memory leaks during 24/7 server operations.
 
-## 4. Key Properties & Features
-***AEON Network & ToO Ready:** Native support for dynamic instrument changes (e.g., SOAR Goodman, Gemini GMOS) and Target of Opportunity (ToO) alerts. It tracks observations by unique API id rather than coordinates, ensuring updated requests are never skipped.
-***Smart Dynamic FOV & Star Selection:** Automatically scales the camera FOV to tightly fit the top 3 closest reference stars. It strictly enforces instrument-specific minimum FOVs and automatically excludes reference stars closer than 2.0" to the science target to prevent guiding on blended sources.
-* **Flexible Input Parsing:** Capable of digesting both standard AEON JSON structures and flat `.txt` files containing rows of `TargetName HH:MM:SS +/-DD:MM:SS PA=value`, making it highly adaptable for visiting astronomers.
-***Intelligent Local Caching:** Synchronously manages a local FITS file cache (capped at 3.0 GB by default) to prevent redundant downloads and save bandwidth.
-* **Clean File Management:** By default, the program operates immaculately by utilizing temporary directories for Drive uploads, ensuring it does not clutter the host machine's hard drive unless specifically instructed via the `--output-folder` command line argument. If instructed, it safely checks for the directory's existence and creates it if missing.
-* **Data-Driven Titles:** Plot titles clearly state the applied FOV rather than repeating the target name, allowing telescope operators to instantly verify the scale of the image on the screen.
+## 4. Pipeline Logic & Mechanics
 
-## 5. Project Architecture Map
-The pipeline is strictly modularized into four key components:
-* **`run_batch.py`**: The Master Controller. Handles multiprocessing, calculates Astronomical Nights (T-12h), manages state (`processed_ids.json`), and coordinates synchronous tasks (cache cleaning, Drive folder creation) to prevent race conditions.
-* **`finder.py`**: The Core Plotting Engine. Calculates target-to-star radial distances, dynamically adjusts the FOV based on the `INSTRUMENT_SPECS` dictionary, and uses `reproject` and matplotlib to render the final PDF with WCS-accurate compass roses and slit overlays.
-* **`soar_api.py`**: The API Connector. Securely authenticates with the LCO proxy, queries a rolling 31-day window, and formats the raw schedule into a clean JSON digest.
-* **`utils.py`**: The Toolbelt. Contains the Astropy coordinate parsers, multithreaded FITS downloaders, Google Drive Singleton handlers, the 3GB local cache manager, and the centralized logging configuration.
+### Directory Sorting (The T-12h Astronomical Night)
+The pipeline does not blindly save files based on the UTC time of execution. To align with astronomical standards, it reads the exact `windows` array from the API, subtracts **12 hours** from the UTC start time, and groups all targets belonging to the same observing night into a specific folder formatted as `Night_YYYY-MM-DD`. If an observation has multiple valid windows, the pipeline generates the PDF *once* but uploads copies to *all* applicable Night folders.
+
+### Dynamic FOV & Slit Calibration
+The `finder.py` engine automatically scales the camera Field of View to tightly fit the top 3 closest reference stars. It strictly enforces physical limits defined in the `INSTRUMENT_SPECS` dictionary:
+* **GOODMAN:** Min 1.8' | Max 7.2' | Slit 234.0"
+* **GMOS:** Min 2.0' | Max 5.5' | Slit 108.0"
+* **TS4:** Min 1.0' | Max 4.0' | Slit 28.0"
+
+## 5. Supported Input Formats
+
+When running the pipeline manually using the `--input-json` argument, you can provide two types of files:
+
+### a) The Advanced JSON Format
+Native format supporting full pipeline capabilities (custom instruments, FOV overrides, multiple windows).
+
+```
+[
+  {
+    "id": "obs_001",
+    "object_name": "Target_A",
+    "ra": "06:45:08.9",
+    "dec": "-16:42:58",
+    "pa": "para",
+    "instrument": "GMOS",
+    "fov": 4.5,
+    "slit": 0.75,
+    "windows": [{"start": "2026-03-22T02:00:00Z", "end": "2026-03-22T03:00:00Z"}]
+  }
+]
+```
+
+### b) The Flat Text Format (.txt or .dat)
+A quick, tabular format ideal for visiting astronomers. The parser splits lines by whitespace. It defaults the instrument to GOODMAN and the FOV to 3.0.
+
+Format: Name   RA   DEC   [Notes]   PA=value
+
+```
+Target_Decimal   183.0512   13.2254    Decimal_Test   PA=45.0
+Sirius_Test      06:45:08.9 -16:42:58  Sexagesimal    PA=0.0
+M87_Para         187.7059   12.3911    Parallactic    PA=para
+```
+
+## 6. Authentication & Environment Secrets
+To authenticate with the AEON/LCO proxy, you must create a .env file in the root directory. Crucially, the API Token string must begin with the word "Token " followed by a space and your key. Example .env file:
+
+SOAR_API_TOKEN=Token a1b2c3d4e5f6g7h8i9j0

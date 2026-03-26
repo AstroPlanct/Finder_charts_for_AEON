@@ -125,7 +125,7 @@ def fits2image_projected(hdu_opt, hdu_ir, stars_opt, stars_ir, pa_deg=0, imsize=
     # Extract header info from whichever FITS file successfully downloaded
     base_hdu = hdu_opt if hdu_opt else hdu_ir
     s_name = base_hdu[0].header['s_name']
-    # Muestra máximo 25 caracteres para evitar solapamientos
+    # Display a maximum of 25 characters to prevent text overlapping
     display_name = s_name if len(s_name) <= 25 else s_name[:22] + "..."
     ax_text.text(0.0, 0.95, f"{display_name}", color="#8B0000", fontsize=22, fontweight="bold")
     
@@ -203,7 +203,6 @@ def fits2image_projected(hdu_opt, hdu_ir, stars_opt, stars_ir, pa_deg=0, imsize=
         if not isinstance(stars_df, str) and not stars_df.empty:
             colors = ["#FFD700", "#00BFFF", "#FF00FF"]
             
-            # 1. TABLA DIRECTA (Gráficos I o III)
             ax_text.text(0, y_start, f"Chart {n_d} Ref Stars (Offsets):", fontweight="bold", fontsize=11, color=c_main)
             for i, (_, row) in enumerate(stars_df.head(3).iterrows()):
                 sx, sy = wcs.world_to_pixel(SkyCoord(row.ra * u.deg, row.dec * u.deg, frame="icrs"))
@@ -215,14 +214,13 @@ def fits2image_projected(hdu_opt, hdu_ir, stars_opt, stars_ir, pa_deg=0, imsize=
                 ax_text.text(0.35, y_p, rf"$\bf{{{abs(row.offset_EW_arcsec):.1f}''\ {'W' if row.offset_EW_arcsec >= 0 else 'E'}}}$", color=colors[i], fontsize=12)
                 ax_text.text(0.70, y_p, rf"$\bf{{{abs(row.offset_NS_arcsec):.1f}''\ {'S' if row.offset_NS_arcsec >= 0 else 'N'}}}$", color=colors[i], fontsize=12)
             
-            # 2. TABLA ROTADA (Gráficos II o IV)
-            y_rot_start = y_start - 0.16 # Ligeramente más espacio entre I y II
+            # Rotated table (Charts II or IV)
+            y_rot_start = y_start - 0.16 
             ax_text.text(0, y_rot_start, f"Chart {n_r} Ref Stars (Offsets):", fontweight="bold", fontsize=11, color=c_rot_header)
             for i, (_, row) in enumerate(stars_df.head(3).iterrows()):
                 sx, sy = wcs.world_to_pixel(SkyCoord(row.ra * u.deg, row.dec * u.deg, frame="icrs"))
                 draw_crosshair(ax_rot, sx, sy, gap=2.5/pix, arm=7.0/pix, color=colors[i], label=f"{p_rot}{i+1}", offset=3.0/pix)
                 
-                # INVERTIR OFFSETS PARA EL GRÁFICO ROTADO (Cambia el signo para voltear N/S y E/W)
                 inv_EW = -row.offset_EW_arcsec
                 inv_NS = -row.offset_NS_arcsec
                 
@@ -232,7 +230,7 @@ def fits2image_projected(hdu_opt, hdu_ir, stars_opt, stars_ir, pa_deg=0, imsize=
                 ax_text.text(0.35, y_p, rf"$\bf{{{abs(inv_EW):.1f}''\ {'W' if inv_EW >= 0 else 'E'}}}$", color=colors[i], fontsize=12)
                 ax_text.text(0.70, y_p, rf"$\bf{{{abs(inv_NS):.1f}''\ {'S' if inv_NS >= 0 else 'N'}}}$", color=colors[i], fontsize=12)
             
-            # Retorna un piso con MAYOR ESPACIO (-0.32) para separar correctamente las tablas II y III
+          
             return y_start - 0.32 
         else:
             return y_start - 0.05
@@ -251,7 +249,6 @@ def fits2image_projected(hdu_opt, hdu_ir, stars_opt, stars_ir, pa_deg=0, imsize=
     if hdu_opt: 
         wv_mark = hdu_opt[0].header.get('w_mark', 'Optical')
         filt_mark = "Red" if wv_mark == "DSS" else "r-band"
-        # Pasa 'a' para el gráfico I, y 'b' para el gráfico II
         current_y_text = plot_row(hdu_opt, 0, wv_mark, filt_mark, current_y_text, stars_opt, p_dir="a", p_rot="b")
 
     # Render IR Row (Chart III & IV, Table Header in Green)
@@ -261,7 +258,7 @@ def fits2image_projected(hdu_opt, hdu_ir, stars_opt, stars_ir, pa_deg=0, imsize=
         
     return fig
 
-def run_pipeline(s_name, ra_str, dec_str, instrument="GOODMAN", pa_deg=0.0, imsize=3.0, radius=1.0, contrast=0.045, slit_width=1.0, output_folder=None, drive_folder=None, is_parallactic=False):
+def run_pipeline(s_name, ra_str, dec_str, instrument="GOODMAN", pa_deg=0.0, imsize=3.0, radius=1.0, contrast=0.045, slit_width=1.0, output_folders=None, drive_folders=None, is_parallactic=False):
     ra, dec = parse_coords(ra_str, dec_str)
     
     # Generate both coordinate strings using astropy SkyCoord
@@ -302,9 +299,13 @@ def run_pipeline(s_name, ra_str, dec_str, instrument="GOODMAN", pa_deg=0.0, imsi
         f_opt = executor.submit(get_image_fallbacks, ra, dec, s_name, dynamic_imsize*1.5)
         f_ir = executor.submit(get_image_2mass, ra, dec, s_name, dynamic_imsize*1.5)
         try: hdu_opt = f_opt.result()
-        except: hdu_opt = None
+        except Exception as e: 
+            logger.warning(f"Optical image fetch failed: {e}")
+            hdu_opt = None
         try: hdu_ir = f_ir.result()
-        except: hdu_ir = None
+        except Exception as e: 
+            logger.warning(f"IR image fetch failed: {e}")
+            hdu_ir = None
 
     # Abort if absolutely no images could be downloaded
     if not hdu_opt and not hdu_ir: 
@@ -315,30 +316,35 @@ def run_pipeline(s_name, ra_str, dec_str, instrument="GOODMAN", pa_deg=0.0, imsi
     
     expected_filename = f"{s_name}_{clean_inst}_FOV{dynamic_imsize}_PA{'PARA' if is_parallactic else pa_deg}.pdf"
     
-    # Handle Local Saving vs Temp Uploading
-    if output_folder:
-        out_dir = Path(output_folder)
-        out_dir.mkdir(parents=True, exist_ok=True)
-        base = out_dir / expected_filename
-        fig.savefig(base, format="pdf", bbox_inches="tight", pad_inches=0.02)
-        logger.info(f"Saved locally: {base}")
-        if drive_folder: 
-            upload_to_drive(base, drive_folder)
+    # Handle Local Saving vs Temp Uploading for multiple folders
+    if output_folders:
+        for out_dir_str in output_folders:
+            out_dir = Path(out_dir_str)
+            out_dir.mkdir(parents=True, exist_ok=True)
+            base = out_dir / expected_filename
+            fig.savefig(base, format="pdf", bbox_inches="tight", pad_inches=0.02)
+            logger.info(f"Saved locally: {base}")
+            
+        # If Drive upload is requested, upload the first local file to all Drive folders
+        if drive_folders: 
+            base_path = Path(output_folders[0]) / expected_filename
+            for d_folder in drive_folders:
+                upload_to_drive(base_path, d_folder)
     else:
         # If no local saving is requested, but Drive upload is, use a temporary file
-        if drive_folder:
+        if drive_folders:
             with tempfile.TemporaryDirectory() as tmpdir:
                 temp_path = Path(tmpdir) / expected_filename
                 fig.savefig(temp_path, format="pdf", bbox_inches="tight", pad_inches=0.02)
-                upload_to_drive(temp_path, drive_folder)
-                logger.info(f"Uploaded to Drive (Skipped local save): {expected_filename}")
+                for d_folder in drive_folders:
+                    upload_to_drive(temp_path, d_folder)
+                    logger.info(f"Uploaded to Drive (Skipped local save): {expected_filename} to Drive ID {d_folder}")
         else:
-            logger.warning("Neither output_folder nor drive_folder provided. Chart generated but discarded.")
+            logger.warning("Neither output_folders nor drive_folders provided. Chart generated but discarded.")
             
     # Explicitly clear and close the Matplotlib figure to prevent massive memory leaks
     fig.clf() 
     plt.close('all')
-    
 
 # If executed from CLI, parse arguments and run
 if __name__ == "__main__":
@@ -350,4 +356,8 @@ if __name__ == "__main__":
     args.add_argument("--instrument", type=str, default="GOODMAN")
     args.add_argument("--output-folder", type=str, default='./finder_charts/')
     parsed = args.parse_args()
-    run_pipeline(s_name=parsed.s_name, ra_str=parsed.ra_, dec_str=parsed.dec_, instrument=parsed.instrument, pa_deg=parsed.pa_deg, output_folder=parsed.output_folder)
+
+    run_pipeline(s_name=parsed.s_name, ra_str=parsed.ra_, dec_str=parsed.dec_, 
+                 instrument=parsed.instrument, pa_deg=parsed.pa_deg, 
+                 output_folders=[parsed.output_folder])
+

@@ -7,12 +7,16 @@ from datetime import datetime, timedelta
 # Import load_dotenv to securely read environment variables from a .env file
 from dotenv import load_dotenv
 # Import our custom logger from utils.py
-from utils import setup_logger
+from utils import setup_logger, retry_with_backoff
 
 # Load the variables from the .env file into the script's environment
 load_dotenv()
 # Initialize the logger specifically for this API fetcher module
 logger = setup_logger(name="api_fetcher")
+
+#If your server temporarily loses its internet connection, 
+#the program will catch the DNS error, wait 7 seconds, and try again.
+@retry_with_backoff(retries=10, backoff_in_seconds=7)
 
 def fetch_soar_data_to_json():
     # Define the AEON/LCO observation portal API endpoint
@@ -21,9 +25,9 @@ def fetch_soar_data_to_json():
     # Get the current UTC time
     now = datetime.utcnow()
     # Define the search window: from XX days in the past...
-    start_str = (now - timedelta(days=47)).strftime('%Y-%m-%d %H:%M:%S')
+    start_str = (now - timedelta(days=90)).strftime('%Y-%m-%d %H:%M:%S')
     # ...up to XX days in the future
-    end_str = (now + timedelta(days=0)).strftime('%Y-%m-%d %H:%M:%S')
+    end_str = (now + timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S')
 
     # Set up the URL parameters for the API request
     params = {'start': start_str, 'end': end_str, 'limit': 1000}
@@ -53,8 +57,19 @@ def fetch_soar_data_to_json():
             # Parse the response as JSON
             data = response.json()
             
-            # Loop through each observation in the 'results' list
+	# Loop through each observation in the 'results' list
             for obs in data.get('results', []):
+                # Filter by STATE: Only process PENDING observations
+                state = obs.get('state', '')
+                if state != 'PENDING':
+                    continue
+                
+                # Extract observation windows
+                windows = obs.get('windows', [])
+                # Fallback if windows array is missing but a start time exists
+                if not windows and obs.get('start'):
+                    windows = [{'start': obs.get('start'), 'end': obs.get('end', obs.get('start'))}]
+
                 # Set default values in case they are missing
                 ra, dec, instrument = None, None, "UNKNOWN"
                 try:
@@ -64,15 +79,15 @@ def fetch_soar_data_to_json():
                     # Extract the instrument type, defaulting to GOODMAN if missing
                     instrument = config.get('instrument_type', 'GOODMAN')
                 except (KeyError, IndexError, TypeError):
-                    # Ignore errors if the structure is incomplete
-                    pass
+                    pass # Ignore errors if the structure is incomplete
 
                 # Append a clean, simplified dictionary to our list
                 all_observations.append({
                     'id': obs.get('id'),
                     'object_name': obs.get('name'),
                     'proposal': obs.get('proposal'),
-                    'start_time': obs.get('start'),
+                    'state': state,
+                    'windows': windows,
                     'instrument': instrument,
                     'ra': ra, 'dec': dec
                 })

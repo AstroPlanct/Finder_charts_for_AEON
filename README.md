@@ -1,27 +1,41 @@
 # 🔭 AEON/SOAR Finder Pipeline - Quick Start
 
-## Prerequisites
-1. Python 3.9+ with dependencies: `pip install numpy matplotlib astropy astroquery pyvo requests python-dotenv google-api-python-client google-auth-httplib2 google-auth-oauthlib reproject charset-normalizer`
-2. `.env` file containing: `SOAR_API_TOKEN=Your_Token_Here`
-3. `drive_credentials.json` (Google Service Account key) in the root directory.
+A fully automated, enterprise-grade pipeline designed to generate astronomical Finder Charts for the SOAR Telescope and the AEON Network. For an in-depth explanation of the architecture, algorithms, and advanced configurations, please read the (readme_extended.md).
 
-## Running the Pipeline
+1. ## Prerequisites
 
-**1. Production Mode (Daemon)**
-Runs continuously, checks the LCO portal every 5 minutes, and uploads to Google Drive. Does *not* save locally by default. Run this inside `tmux` or `screen`[cite: 15]:
-```bash
-python run_batch.py --drive-folder "YOUR_DRIVE_FOLDER_ID" --max-workers 4
+#### Python 3.9+ with dependencies:
+ 
+```   pip install numpy matplotlib astropy astroquery pyvo requests python-dotenv google-api-python-client google-auth-httplib2 google-auth-oauthlib reproject charset-normalizer
+```
 
-2. Single Batch / Local Test
-Process a specific JSON file once and exit. Add --output-folder if you want to keep the PDFs on your hard drive:
+#### .env file containing your portal token (must include the word "Token "):
 
-Bash
-python run_batch.py --input-json test_observations.json --run-once --output-folder ./my_charts --max-workers 4
+``` SOAR_API_TOKEN=Token YOUR_SECRET_TOKEN_HERE
+```
 
-3. Standalone Manual Generation
-Bypass the API and generate a single chart instantly:
+#### drive_credentials.json (Google Service Account key) placed in the root directory.
 
-Bash
-python finder.py --s-name "Target_X" --ra "183.05" --dec "13.22" --pa-deg 45.0 --instrument "GOODMAN" --output-folder ./my_charts
 
-Note: To force a rerun of completed targets, delete processed_ids.json.
+2. ## Running the Pipeline
+
+#### Production Mode (Daemon)
+
+Runs continuously, checks the LCO portal every 5 minutes, and uploads to Google Drive. Run this inside tmux or screen:
+
+``` python run_batch.py --drive-folder "YOUR_DRIVE_FOLDER_ID" --max-workers 4 
+```
+
+#### Single Batch / Local Test
+
+Process a specific JSON or TXT file once and exit. Add --output-folder to keep the PDFs on your hard drive:
+
+``` python run_batch.py --input-json test_targets.json --run-once --output-folder ./my_charts --max-workers 4
+```
+
+#### Standalone Manual Generation
+
+Bypass the API entirely and generate a single chart instantly via the CLI:
+
+``` python finder.py --s-name "Target_X" --ra "183.05" --dec "13.22" --pa-deg 45.0 --instrument "GOODMAN" --output-folder ./my_charts
+```

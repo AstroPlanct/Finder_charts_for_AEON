@@ -1,0 +1,31 @@
+# ==========================================================
+# AEON/SOAR Finder Pipeline - Text Parsing Test File
+# Supported Format: Name  RA  DEC  [Any Notes]  PA=value
+# Note: The txt parser defaults to GOODMAN and FOV=3.0
+# ==========================================================
+
+# 1. Standard decimal coordinates with standard PA
+Target_Decimal   183.0512   13.2254    Decimal_Test   PA=45.0
+
+# 2. Sexagesimal coordinates (HH:MM:SS) with negative DEC and 0 PA
+Sirius_Test      06:45:08.9 -16:42:58  Sexagesimal    PA=0.0
+
+# 3. Requesting Parallactic angle using 'para'
+M87_Para         187.7059   12.3911    Parallactic    PA=para
+
+# 4. Requesting Parallactic angle using 'parallactic' (case insensitive)
+NGC104_Globular  00:24:05.6 -72:04:52  Southern_Sky   pa=parallactic
+
+# 5. Missing PA fallback (script should safely default to PA=0.0)
+Orion_Nebula     83.8220    -5.3911    Missing_PA_Tag
+
+# 6. Random spacing/tabs handling (parser splits by whitespace)
+Messier_82       09:55:52.7    +69:40:46    Tabs_Test     PA=90
+
+﻿[1]Sh2-295 07:02:42.60 -11:27:13.00 2000.0 K=13
+[2]G224.28 07:09:21.00 -10:28:29.00 2000.0 K=13
+[3]Coll205 09:00:31.00 -48:59:00.00 2000.0 K=13.2
+[4]ZCMa 07:04:07.50 -11:34:00.00 2000.0 K=12.5
+[5]NGC2645 08:39:05.00 -46:14:00.00 2000.0 K=13.2
+[6]Rupr79 09:40:59.00 -53:51:00.00 2000.0 K=13.2
+[7]RU152 07:29:55.00 -02:06:18.00 2000.0 K=13.1
