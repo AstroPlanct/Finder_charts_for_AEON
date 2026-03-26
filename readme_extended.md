@@ -33,7 +33,7 @@ When running the pipeline manually using the `--input-json` argument, you can pr
 ### a) The Advanced JSON Format
 Native format supporting full pipeline capabilities (custom instruments, FOV overrides, multiple windows).
 
-```
+```bash
 [
   {
     "id": "obs_001",
@@ -54,7 +54,7 @@ A quick, tabular format ideal for visiting astronomers. The parser splits lines 
 
 Format: Name   RA   DEC   [Notes]   PA=value
 
-```
+```bash
 Target_Decimal   183.0512   13.2254    Decimal_Test   PA=45.0
 Sirius_Test      06:45:08.9 -16:42:58  Sexagesimal    PA=0.0
 M87_Para         187.7059   12.3911    Parallactic    PA=para
