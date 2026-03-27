@@ -69,8 +69,8 @@ def get_stars(ra, dec, radius=3.0, wv='optical'):
         # Calculate total absolute distance (Hypotenuse)
         stars["total_dist_arcsec"] = np.sqrt(stars["offset_EW_arcsec"]**2 + stars["offset_NS_arcsec"]**2)
         
-        # Exclude stars that are closer than 0.3 arcseconds to the target (blending prevention)
-        stars = stars[stars["total_dist_arcsec"] >= 0.3]
+        # Exclude stars that are closer than 5.0 arcseconds to the target (blending prevention)
+        stars = stars[stars["total_dist_arcsec"] >= 5.0]
         
         # Sort by distance (closest first) and return
         return stars.sort_values(by="total_dist_arcsec").reset_index(drop=True)
@@ -85,7 +85,7 @@ def select_best_stars(stars_df, max_radius_arcmin):
     if isinstance(stars_df, str) or stars_df.empty:
         return stars_df
         
-    # Filter stars that physically fit inside the instrument's FOV
+    # Filter stars that physically fit inside the instrument's FOV (or specific radius)
     valid_stars = stars_df[stars_df["total_dist_arcsec"] <= (max_radius_arcmin * 60)]
     
     # If no stars are within the max FOV, return the 3 closest as a fallback
@@ -313,16 +313,16 @@ def run_pipeline(s_name, ra_str, dec_str, instrument="GOODMAN", pa_deg=0.0, imsi
         stars_opt_raw = executor.submit(get_stars, ra, dec, 7.0, 'optical').result()
         stars_ir_raw = executor.submit(get_stars, ra, dec, 7.0, 'ir').result()
 
-    # Select the best stars (1 brightest + 2 closest) restricting the radius to half of the max FOV
-    max_radius_arcmin = specs['max_fov'] / 2.0
+    # Select the best stars (1 brightest + 2 closest) restricting the radius to 2.7 arcminutes
+    max_radius_arcmin = 2.7
     stars_opt = select_best_stars(stars_opt_raw, max_radius_arcmin)
     stars_ir = select_best_stars(stars_ir_raw, max_radius_arcmin)
 
     # Calculate the maximum distance of the selected top 3 stars to determine the required FOV
     max_dist = max([max([abs(r['offset_EW_arcsec'])/60, abs(r['offset_NS_arcsec'])/60]) for df in [stars_opt, stars_ir] if not isinstance(df, str) and not df.empty for _, r in df.head(3).iterrows()] + [0.0])
     
-    # Calculate the ideal FOV to wrap the stars, plus 0.4' padding
-    ideal_fov = (max_dist * 2) + 0.4 if max_dist > 0 else imsize
+    # Calculate the ideal FOV to wrap the stars, plus 0.3' padding
+    ideal_fov = (max_dist * 2) + 0.3 if max_dist > 0 else imsize
     
     # Constrain the final FOV to strictly respect the physical limits of the telescope camera
     dynamic_imsize = round(max(specs['min_fov'], min(ideal_fov, specs['max_fov'])), 1)
