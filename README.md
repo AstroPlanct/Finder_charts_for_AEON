@@ -1,4 +1,4 @@
-# 🔭 AEON/SOAR Automated Finder Chart Pipeline
+# 🔭 AEON/SOAR Automated Finder Chart Pipeline 🌌
 
 An enterprise-grade, fully automated pipeline designed to generate astronomical Finder Charts for the SOAR Telescope and the AEON (Astronomical Event Observatory Network).
 
@@ -12,8 +12,9 @@ Python: 3.9+
 
 Dependencies: Install the required packages:
 
+```bash
 pip install numpy matplotlib astropy astroquery pyvo requests python-dotenv google-api-python-client google-auth-httplib2 google-auth-oauthlib reproject charset-normalizer
-
+```
 
 LCO/AEON API Credentials: Create a .env file in the root directory. The token must include the word "Token ":
 
@@ -24,23 +25,26 @@ Google Drive Credentials (Optional): Place your drive_credentials.json (Service 
 
 ## 🚀 Quick Start & Execution Modes
 
-### 1. Production Mode (Daemon)
+### 🤖 1. Production Mode (Daemon)
 
 Runs continuously, checks the LCO portal every 5 minutes, and uploads charts to Google Drive organized by Astronomical Night. Best run inside tmux or screen.
 
+```bash
 python run_batch.py --drive-folder "YOUR_DRIVE_FOLDER_ID" --max-workers 4
+```
 
-
-### 2. Single Batch / Local Test
+### 🎯 2. Single Batch / Local Test
 
 Processes a specific local JSON or TXT file once and exits. Saves the PDFs locally.
 
+```bash
 python run_batch.py --input-json test_targets.json --run-once --output-folder ./my_charts --max-workers 4
+```
 
-
-### 3. Standalone Manual Generation
+### 🧠 3. Standalone Manual Generation
 
 Bypasses the batch processor and generates a single chart instantly via the CLI.
 
+```bash
 python finder.py --s-name "Target_X" --ra "183.05" --dec "13.22" --pa-deg 45.0 --instrument "GOODMAN" --output-folder ./my_charts
-
+```
