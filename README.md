@@ -1,41 +1,46 @@
-# 🔭 AEON/SOAR Finder Pipeline - Quick Start
+🔭 AEON/SOAR Automated Finder Chart Pipeline
 
-A fully automated, enterprise-grade pipeline designed to generate astronomical Finder Charts for the SOAR Telescope and the AEON Network. For an in-depth explanation of the architecture, algorithms, and advanced configurations, please read the (readme_extended.md).
+An enterprise-grade, fully automated pipeline designed to generate astronomical Finder Charts for the SOAR Telescope and the AEON (Astronomical Event Observatory Network).
 
-1. ## Prerequisites
+This system continuously polls observation schedules, dynamically calculates optimal Fields of View (FOV), queries multiple star catalogs with automatic failovers, and uploads memory-safe PDF renders directly to Google Drive.
 
-#### Python 3.9+ with dependencies:
- 
-```bash   pip install numpy matplotlib astropy astroquery pyvo requests python-dotenv google-api-python-client google-auth-httplib2 google-auth-oauthlib reproject charset-normalizer
-```
+For an in-depth explanation of the architecture, fallback algorithms, and advanced configurations, please refer to the readme_extended.md.
 
-#### .env file containing your portal token (must include the word "Token "):
+⚙️ Prerequisites
 
-```bash SOAR_API_TOKEN=Token YOUR_SECRET_TOKEN_HERE
-```
+Python: 3.9+
 
-#### drive_credentials.json (Google Service Account key) placed in the root directory.
+Dependencies: Install the required packages:
+
+pip install numpy matplotlib astropy astroquery pyvo requests python-dotenv google-api-python-client google-auth-httplib2 google-auth-oauthlib reproject charset-normalizer
 
 
-2. ## Running the Pipeline
+LCO/AEON API Credentials: Create a .env file in the root directory. The token must include the word "Token ":
 
-#### Production Mode (Daemon)
+SOAR_API_TOKEN=Token YOUR_SECRET_TOKEN_HERE
 
-Runs continuously, checks the LCO portal every 5 minutes, and uploads to Google Drive. Run this inside tmux or screen:
 
-```bash python run_batch.py --drive-folder "YOUR_DRIVE_FOLDER_ID" --max-workers 4 
-```
+Google Drive Credentials (Optional): Place your drive_credentials.json (Service Account key) in the root directory to enable cloud uploads.
 
-#### Single Batch / Local Test
+🚀 Quick Start & Execution Modes
 
-Process a specific JSON or TXT file once and exit. Add --output-folder to keep the PDFs on your hard drive:
+1. Production Mode (Daemon)
 
-```bash python run_batch.py --input-json test_targets.json --run-once --output-folder ./my_charts --max-workers 4
-```
+Runs continuously, checks the LCO portal every 5 minutes, and uploads charts to Google Drive organized by Astronomical Night. Best run inside tmux or screen.
 
-#### Standalone Manual Generation
+python run_batch.py --drive-folder "YOUR_DRIVE_FOLDER_ID" --max-workers 4
 
-Bypass the API entirely and generate a single chart instantly via the CLI:
 
-```bash python finder.py --s-name "Target_X" --ra "183.05" --dec "13.22" --pa-deg 45.0 --instrument "GOODMAN" --output-folder ./my_charts
-```
+2. Single Batch / Local Test
+
+Processes a specific local JSON or TXT file once and exits. Saves the PDFs locally.
+
+python run_batch.py --input-json test_targets.json --run-once --output-folder ./my_charts --max-workers 4
+
+
+3. Standalone Manual Generation
+
+Bypasses the batch processor and generates a single chart instantly via the CLI.
+
+python finder.py --s-name "Target_X" --ra "183.05" --dec "13.22" --pa-deg 45.0 --instrument "GOODMAN" --output-folder ./my_charts
+

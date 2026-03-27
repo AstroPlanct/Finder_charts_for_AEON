@@ -1,39 +1,32 @@
-# 🔭 AEON/SOAR Automated Finder Chart Pipeline - Extended Documentation
+# 🔭 AEON/SOAR Finder Chart Pipeline - Extended Documentation
 
-## 1. Objective
-The primary objective of this project is to provide an enterprise-grade, fully automated pipeline designed to generate astronomical Finder Charts for the SOAR Telescope and the broader AEON (Astronomical Event Observatory Network). Built for 24/7 facility-level operation, this system continuously polls observation schedules, dynamically calculates optimal Fields of View (FOV) based on instrument specifications, queries multiple star catalogs with automatic failovers, and uploads memory-safe PDF renders directly to Google Drive.
+## 🌙 1. Objective & Scope
+The primary objective of this project is to bridge the gap between observation scheduling and telescope operations. Built for 24/7 facility-level operation, this software automatically fetches approved observations, performs astrometric analysis to find optimal guiding stars, downloads/reprojects FITS images, and delivers publication-ready PDFs to Google Drive.
 
-## 2. Scope
-This software bridges the gap between observation scheduling and telescope operations. Its scope covers:
-* **Data Ingestion:** Automatically fetching approved observations via the LCO/AEON API portal, or parsing local user-provided `.json` and `.txt`/`.dat` files. 
-* **Astrometric Analysis:** Automatically querying optical and near-infrared databases (Gaia DR3, Pan-STARRS, Legacy Survey, 2MASS) to find optimal guiding stars.
-* **Image Processing & Rendering:** Downloading astrometric FITS images, reprojecting them to account for Position Angle (PA) rotations, and generating publication-ready PDFs with accurate WCS coordinate grids and instrument slit overlays.
-* **Cloud Delivery:** Synchronously managing Google Drive directories to organize outputs and securely upload final charts.
+## 🚀 2. Core Architecture & Resiliency
 
-## 3. Core Strengths & Architecture
-* **Extreme Network Resiliency:** Implements exponential backoff (`@retry_with_backoff`) for unstable astronomical databases. If Gaia DR3 is down, it gracefully falls back to Pan-STARRS, then to the Legacy Survey.
-* **Multiprocessing Engine:** Utilizes Python's `ProcessPoolExecutor` to circumvent the Global Interpreter Lock (GIL) and Matplotlib's thread-locking issues, rendering multiple PDFs simultaneously.
-* **Memory-Safe Daemon:** Built to run infinitely. It forces explicit garbage collection to eliminate memory leaks during 24/7 server operations.
+* **Extreme Network Resiliency:** Astronomical databases can be unstable. The pipeline implements exponential backoff (`@retry_with_backoff`) and an automatic fallback chain for catalog queries: **Gaia DR3 $\rightarrow$ Pan-STARRS $\rightarrow$ Legacy Survey $\rightarrow$ 2MASS**.
+* **Multiprocessing Engine:** Utilizes Python's `ProcessPoolExecutor` to circumvent the Global Interpreter Lock (GIL). It renders multiple PDFs simultaneously, significantly reducing processing time for large observation batches.
+* **Memory & Cache Safety:** Built to run infinitely as a daemon. It forces explicit Matplotlib garbage collection to eliminate memory leaks and automatically prunes the local `./fits_cache` directory if it exceeds 3.0 GB.
 
-## 4. Pipeline Logic & Mechanics
+## 🛰️ 3. Pipeline Mechanics
 
-### Directory Sorting (The T-12h Astronomical Night)
-The pipeline does not blindly save files based on the UTC time of execution. To align with astronomical standards, it reads the exact `windows` array from the API, subtracts **12 hours** from the UTC start time, and groups all targets belonging to the same observing night into a specific folder formatted as `Night_YYYY-MM-DD`. If an observation has multiple valid windows, the pipeline generates the PDF *once* but uploads copies to *all* applicable Night folders.
+### The T-12h Astronomical Night Sorting
+To align with standard astronomical practices, the pipeline does not organize files by the UTC time of execution. It reads the target's temporal window, subtracts **12 hours** from the UTC start time, and dynamically generates folders formatted as `Night_YYYY-MM-DD`. If a target has multiple windows, the PDF is generated once but distributed to all applicable night folders.
 
 ### Dynamic FOV & Slit Calibration
-The `finder.py` engine automatically scales the camera Field of View to tightly fit the top 3 closest reference stars. It strictly enforces physical limits defined in the `INSTRUMENT_SPECS` dictionary:
+The `finder.py` engine automatically scales the camera's Field of View (FOV) to tightly wrap the top 3 closest reference stars. However, it strictly enforces the physical constraints of the selected instrument:
 * **GOODMAN:** Min 1.8' | Max 7.2' | Slit 234.0"
 * **GMOS:** Min 2.0' | Max 5.5' | Slit 108.0"
 * **TS4:** Min 1.0' | Max 4.0' | Slit 28.0"
 
-## 5. Supported Input Formats
+## 🌟 4. Supported Input Formats (Local Batching)
 
-When running the pipeline manually using the `--input-json` argument, you can provide two types of files:
+When bypassing the API using `--input-json`, the pipeline accepts two file types:
 
-### a) The Advanced JSON Format
-Native format supporting full pipeline capabilities (custom instruments, FOV overrides, multiple windows).
-
-```bash
+### A. Advanced JSON Format
+The native format supporting full pipeline capabilities, including custom instruments, FOV overrides, and multiple temporal windows.
+```json
 [
   {
     "id": "obs_001",
@@ -47,20 +40,26 @@ Native format supporting full pipeline capabilities (custom instruments, FOV ove
     "windows": [{"start": "2026-03-22T02:00:00Z", "end": "2026-03-22T03:00:00Z"}]
   }
 ]
-```
 
-### b) The Flat Text Format (.txt or .dat)
-A quick, tabular format ideal for visiting astronomers. The parser splits lines by whitespace. It defaults the instrument to GOODMAN and the FOV to 3.0.
 
-Format: Name   RA   DEC   [Notes]   PA=value
+B. Flat Text Format (.txt or .dat)
 
-```bash
+[cite_start]A rapid, tabular format ideal for visiting astronomers[cite: 3]. It splits lines by whitespace. [cite_start]The parser automatically defaults the instrument to GOODMAN and FOV to 3.0[cite: 3].
+Format: Name | RA | DEC | [Notes] | PA=value
+
 Target_Decimal   183.0512   13.2254    Decimal_Test   PA=45.0
 Sirius_Test      06:45:08.9 -16:42:58  Sexagesimal    PA=0.0
 M87_Para         187.7059   12.3911    Parallactic    PA=para
-```
 
-## 6. Authentication & Environment Secrets
-To authenticate with the AEON/LCO proxy, you must create a .env file in the root directory. Crucially, the API Token string must begin with the word "Token " followed by a space and your key. Example .env file:
 
-SOAR_API_TOKEN=Token a1b2c3d4e5f6g7h8i9j0
+(Note: Both decimal and sexagesimal coordinates are parsed automatically.)
+
+🌌 5. Generated PDF Layout (Finder Chart)
+
+The final document is divided into a logical and visual grid:
+
+Chart I & II (Optical): Displays the target in optical light (r-band). Chart I shows the direct view (North up, East to the left), and Chart II reflects the requested rotation (Position Angle).
+
+Chart III & IV (Infrared): Repeats the process using J-band images from the 2MASS catalog.
+
+Metadata & Tables: The right panel includes the target's name, coordinates in both sexagesimal and decimal formats, and tables detailing the magnitudes and absolute offsets of the guide stars for fine calibration.
