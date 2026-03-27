@@ -40,7 +40,7 @@ The native format supporting full pipeline capabilities, including custom instru
     "windows": [{"start": "2026-03-22T02:00:00Z", "end": "2026-03-22T03:00:00Z"}]
   }
 ]
-
+```
 
 B. Flat Text Format (.txt or .dat)
 
@@ -54,7 +54,7 @@ M87_Para         187.7059   12.3911    Parallactic    PA=para
 
 (Note: Both decimal and sexagesimal coordinates are parsed automatically.)
 
-🌌 5. Generated PDF Layout (Finder Chart)
+## 🌌 5. Generated PDF Layout (Finder Chart)
 
 The final document is divided into a logical and visual grid:
 
