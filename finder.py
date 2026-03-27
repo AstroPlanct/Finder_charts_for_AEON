@@ -4,6 +4,7 @@ from pathlib import Path
 import warnings
 from concurrent.futures import ThreadPoolExecutor
 import numpy as np
+import pandas as pd
 import matplotlib as mpl
 # Force Matplotlib to use the 'Agg' backend (Headless mode) to prevent server crashes
 mpl.use('Agg')
@@ -68,12 +69,41 @@ def get_stars(ra, dec, radius=3.0, wv='optical'):
         # Calculate total absolute distance (Hypotenuse)
         stars["total_dist_arcsec"] = np.sqrt(stars["offset_EW_arcsec"]**2 + stars["offset_NS_arcsec"]**2)
         
-        # Exclude stars that are closer than 2.0 arcseconds to the target (blending prevention)
-        stars = stars[stars["total_dist_arcsec"] >= 2.0]
+        # Exclude stars that are closer than 0.3 arcseconds to the target (blending prevention)
+        stars = stars[stars["total_dist_arcsec"] >= 0.3]
         
         # Sort by distance (closest first) and return
         return stars.sort_values(by="total_dist_arcsec").reset_index(drop=True)
     return ''
+
+def select_best_stars(stars_df, max_radius_arcmin):
+    """
+    Selects the best 3 reference stars:
+    1. The brightest one within the maximum FOV radius (to ensure visibility).
+    2. The 2 closest stars to the target.
+    """
+    if isinstance(stars_df, str) or stars_df.empty:
+        return stars_df
+        
+    # Filter stars that physically fit inside the instrument's FOV
+    valid_stars = stars_df[stars_df["total_dist_arcsec"] <= (max_radius_arcmin * 60)]
+    
+    # If no stars are within the max FOV, return the 3 closest as a fallback
+    if valid_stars.empty or valid_stars['mag'].isnull().all():
+        return stars_df.head(3)
+        
+    # 1. Find the index of the brightest star (lowest magnitude)
+    brightest_idx = valid_stars['mag'].idxmin()
+    brightest_star = stars_df.loc[[brightest_idx]]
+    
+    # 2. Get the remaining stars (excluding the brightest) and select the 2 closest
+    remaining_stars = stars_df.drop(index=brightest_idx).sort_values(by="total_dist_arcsec")
+    closest_stars = remaining_stars.head(2)
+    
+    # 3. Combine: Brightest first, then the closest ones
+    final_stars = pd.concat([brightest_star, closest_stars])
+    
+    return final_stars
 
 def add_compass_rose(ax, visible_size, cx, cy, wcs, is_rotated=False, col="#E69F00"):
     # Calculate lengths and margins for the compass arrows
@@ -129,7 +159,7 @@ def fits2image_projected(hdu_opt, hdu_ir, stars_opt, stars_ir, pa_deg=0, imsize=
     display_name = s_name if len(s_name) <= 25 else s_name[:22] + "..."
     ax_text.text(0.0, 0.95, f"{display_name}", color="#8B0000", fontsize=22, fontweight="bold")
     
-    # Write the main Title and both coordinates system    
+    # Write the main Title and both coordinate systems    
     y_ra, y_dec = 0.89, 0.85
     ax_text.text(0.0, y_ra, "RA:", color="#000080", fontsize=14, fontweight="bold")
     ax_text.text(0.0, y_dec, "DEC:", color="#000080", fontsize=14, fontweight="bold")
@@ -144,7 +174,7 @@ def fits2image_projected(hdu_opt, hdu_ir, stars_opt, stars_ir, pa_deg=0, imsize=
     if is_parallactic: 
         ax_text.text(0.0, 0.80, "⚠️ ROTATE TO PARALLACTIC ⚠️", color="red", fontsize=14, fontweight="bold")
 
-# AEON Inner helper function to plot a single row (e.g., Optical or IR row)
+    # Inner helper function to plot a single row (e.g., Optical or IR row)
     def plot_row(hdu, row_idx, cat_name, filt, y_start, stars_df, p_dir, p_rot):
         # UNITS: slit_height is arcsec, dynamic_imsize is arcmin, pixscale is arcsec/pix
         pix, ra, dec, npix = hdu[0].header['pixscale'], hdu[0].header['ra'], hdu[0].header['dec'], hdu[0].header['numpix']
@@ -230,12 +260,10 @@ def fits2image_projected(hdu_opt, hdu_ir, stars_opt, stars_ir, pa_deg=0, imsize=
                 ax_text.text(0.35, y_p, rf"$\bf{{{abs(inv_EW):.1f}''\ {'W' if inv_EW >= 0 else 'E'}}}$", color=colors[i], fontsize=12)
                 ax_text.text(0.70, y_p, rf"$\bf{{{abs(inv_NS):.1f}''\ {'S' if inv_NS >= 0 else 'N'}}}$", color=colors[i], fontsize=12)
             
-          
             return y_start - 0.32 
         else:
             return y_start - 0.05
     
-    # Call the row plotting function for Optical and IR data (if successfully downloaded)
     # Initialize dynamic y_coordinate tracker below titles and RA/DEC headers
     current_y_text = 0.78
     if is_parallactic: 
@@ -245,7 +273,7 @@ def fits2image_projected(hdu_opt, hdu_ir, stars_opt, stars_ir, pa_deg=0, imsize=
     col_opt_direct, col_opt_rot = "#0033CC", "#CC0000" # Blue & Red
     col_ir_direct, col_ir_rot = "#008000", "#800080" # Green & Purple (IR colors)
 
-# Render Optical Row (Chart I & II, Table Header in Blue)
+    # Render Optical Row (Chart I & II, Table Header in Blue)
     if hdu_opt: 
         wv_mark = hdu_opt[0].header.get('w_mark', 'Optical')
         filt_mark = "Red" if wv_mark == "DSS" else "r-band"
@@ -253,7 +281,7 @@ def fits2image_projected(hdu_opt, hdu_ir, stars_opt, stars_ir, pa_deg=0, imsize=
 
     # Render IR Row (Chart III & IV, Table Header in Green)
     if hdu_ir: 
-        # Pasa 'c' para el gráfico III, y 'd' para el gráfico IV
+        # Pass 'c' for chart III, and 'd' for chart IV
         current_y_text = plot_row(hdu_ir, 1, "2MASS", "J-band", current_y_text, stars_ir, p_dir="c", p_rot="d")
         
     return fig
@@ -282,8 +310,13 @@ def run_pipeline(s_name, ra_str, dec_str, instrument="GOODMAN", pa_deg=0.0, imsi
 
     # Query Optical and IR stars concurrently to save network time
     with ThreadPoolExecutor(max_workers=2) as executor:
-        stars_opt = executor.submit(get_stars, ra, dec, 7.0, 'optical').result()
-        stars_ir = executor.submit(get_stars, ra, dec, 7.0, 'ir').result()
+        stars_opt_raw = executor.submit(get_stars, ra, dec, 7.0, 'optical').result()
+        stars_ir_raw = executor.submit(get_stars, ra, dec, 7.0, 'ir').result()
+
+    # Select the best stars (1 brightest + 2 closest) restricting the radius to half of the max FOV
+    max_radius_arcmin = specs['max_fov'] / 2.0
+    stars_opt = select_best_stars(stars_opt_raw, max_radius_arcmin)
+    stars_ir = select_best_stars(stars_ir_raw, max_radius_arcmin)
 
     # Calculate the maximum distance of the selected top 3 stars to determine the required FOV
     max_dist = max([max([abs(r['offset_EW_arcsec'])/60, abs(r['offset_NS_arcsec'])/60]) for df in [stars_opt, stars_ir] if not isinstance(df, str) and not df.empty for _, r in df.head(3).iterrows()] + [0.0])
@@ -360,4 +393,3 @@ if __name__ == "__main__":
     run_pipeline(s_name=parsed.s_name, ra_str=parsed.ra_, dec_str=parsed.dec_, 
                  instrument=parsed.instrument, pa_deg=parsed.pa_deg, 
                  output_folders=[parsed.output_folder])
-
