@@ -44,13 +44,14 @@ The native format supporting full pipeline capabilities, including custom instru
 
 B. Flat Text Format (.txt or .dat)
 
-[cite_start]A rapid, tabular format ideal for visiting astronomers[cite: 3]. It splits lines by whitespace. [cite_start]The parser automatically defaults the instrument to GOODMAN and FOV to 3.0[cite: 3].
-Format: Name | RA | DEC | [Notes] | PA=value
+A rapid, tabular format ideal for visiting astronomers. It splits lines by whitespace. The parser automatically defaults the instrument to GOODMAN and FOV to 3.0.
 
+Format: Name | RA | DEC | [Notes] | PA=value
+```bash
 Target_Decimal   183.0512   13.2254    Decimal_Test   PA=45.0
 Sirius_Test      06:45:08.9 -16:42:58  Sexagesimal    PA=0.0
 M87_Para         187.7059   12.3911    Parallactic    PA=para
-
+```
 
 (Note: Both decimal and sexagesimal coordinates are parsed automatically.)
 
