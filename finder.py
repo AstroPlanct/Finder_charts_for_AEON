@@ -313,8 +313,8 @@ def run_pipeline(s_name, ra_str, dec_str, instrument="GOODMAN", pa_deg=0.0, imsi
         stars_opt_raw = executor.submit(get_stars, ra, dec, 7.0, 'optical').result()
         stars_ir_raw = executor.submit(get_stars, ra, dec, 7.0, 'ir').result()
 
-    # Select the best stars (1 brightest + 2 closest) restricting the radius to 2.7 arcminutes
-    max_radius_arcmin = 2.7
+    # Select the best stars (1 brightest + 2 closest) restricting the radius to 1.5 arcminutes
+    max_radius_arcmin = 1.5
     stars_opt = select_best_stars(stars_opt_raw, max_radius_arcmin)
     stars_ir = select_best_stars(stars_ir_raw, max_radius_arcmin)
 
