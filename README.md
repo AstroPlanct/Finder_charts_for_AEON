@@ -30,7 +30,13 @@ Google Drive Credentials (Optional): Place your drive_credentials.json (Service 
 Runs continuously, checks the LCO portal every 5 minutes, and uploads charts to Google Drive organized by Astronomical Night. Best run inside tmux or screen.
 
 ```bash
-python run_batch.py --drive-folder "YOUR_DRIVE_FOLDER_ID" --max-workers 4
+python run_batch.py --use-google-drive-folder  --max-workers 4
+```
+In order to use `--use-google-drive-folder` you need to define the environment variable `GOOGLE_DRIVE_FOLDER_ID`.
+In a system using bash you can use:
+
+```bash
+export GOOGLE_DRIVE_FOLDER_ID=<YOUR_GOOGLE_DRIVE_FOLDER_ID>
 ```
 
 ### 🎯 2. Single Batch / Local Test
