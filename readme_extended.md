@@ -64,3 +64,14 @@ Chart I & II (Optical): Displays the target in optical light (r-band). Chart I s
 Chart III & IV (Infrared): Repeats the process using J-band images from the 2MASS catalog.
 
 Metadata & Tables: The right panel includes the target's name, coordinates in both sexagesimal and decimal formats, and tables detailing the magnitudes and absolute offsets of the guide stars for fine calibration.
+
+## 😃 6. Credits & Appreciation
+
+This project was brought to life thanks to the great teamwork of:
+
+* **Tomas Ahumada**: For initiating the project and generating the original concept and idea.
+* **Simon Torres**: For his dedication in implementing the features, and fixing/refining the script. 
+
+Their hard work and contributions were essential to making this tool possible!
+
+
