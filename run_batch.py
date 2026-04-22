@@ -1,7 +1,9 @@
 # Import parsing, JSON, and time modules
 import argparse
 import json
+import os
 import re
+import sys
 import time
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -40,7 +42,7 @@ def save_processed_ids(ids_set):
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--drive-folder", type=str, default=None)
+    parser.add_argument("--use-google-drive-folder", action='store_true', help="Define Google Drive folder in environment variable GOOGLE_DRIVE_FOLDER_ID")
     parser.add_argument("--output-folder", type=str, default=None, help="Local directory to save charts.")
     parser.add_argument("--input-json", type=str, default=None)
     parser.add_argument("--run-once", action="store_true")
@@ -85,7 +87,7 @@ def process_single_target(obs, args, drive_folder_cache):
 
     # Handle Drive folder ID assignment for all nights
     drive_ids = []
-    if args.drive_folder:
+    if args.use_google_drive_folder:
         for night in target_nights:
             if night in drive_folder_cache:
                 drive_ids.append(drive_folder_cache[night])
@@ -168,9 +170,12 @@ def process_batch(args):
             unique_nights.add("Night_Unknown")
     
     # If Drive is enabled, synchronously create/fetch all required folders first        
-    if args.drive_folder:
+    if args.use_google_drive_folder:
+        google_drive_folder_id = os.getenv('GOOGLE_DRIVE_FOLDER_ID', None)
+        if not google_drive_folder_id:
+            sys.exit("Error: Undefined GOOGLE_DRIVE_FOLDER_ID environment variable.")
         for night in unique_nights:
-            drive_folder_cache[night] = get_or_create_drive_folder(night, args.drive_folder)
+            drive_folder_cache[night] = get_or_create_drive_folder(night, google_drive_folder_id)
 
     # Synchronously clean up the local FITS cache before launching parallel workers    
     logger.info("Verifying local FITS cache size before parallel processing...")
