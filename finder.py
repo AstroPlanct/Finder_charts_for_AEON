@@ -175,14 +175,15 @@ def fits2image_projected(hdu_opt, hdu_ir, stars_opt, stars_ir, pa_deg=0, imsize=
         ax_text.text(0.0, 0.80, "⚠️ ROTATE TO PARALLACTIC ⚠️", color="red", fontsize=14, fontweight="bold")
 
     # Inner helper function to plot a single row (e.g., Optical or IR row)
-    def plot_row(hdu, row_idx, cat_name, filt, y_start, stars_df, p_dir, p_rot):
+    # Added row_pa parameter to handle independent rotations for Optical and IR
+    def plot_row(hdu, row_idx, cat_name, filt, y_start, stars_df, p_dir, p_rot, row_pa):
         # UNITS: slit_height is arcsec, dynamic_imsize is arcmin, pixscale is arcsec/pix
         pix, ra, dec, npix = hdu[0].header['pixscale'], hdu[0].header['ra'], hdu[0].header['dec'], hdu[0].header['numpix']
         
-        # Construct a synthetic WCS to handle the requested rotation (PA)
+        # Construct a synthetic WCS to handle the requested rotation (PA) using the specific row_pa
         wcs = WCS(naxis=2)
         wcs.wcs.crpix, wcs.wcs.crval, wcs.wcs.ctype = [npix / 2, npix / 2], [ra, dec], ["RA---TAN", "DEC--TAN"]
-        pa_rad = np.deg2rad(pa_deg)
+        pa_rad = np.deg2rad(row_pa)
         wcs.wcs.cd = np.array([[np.cos(pa_rad), np.sin(pa_rad)], [-np.sin(pa_rad), np.cos(pa_rad)]]) @ np.array([[-pix / 3600, 0], [0, pix / 3600]])
 
         try:
@@ -210,7 +211,8 @@ def fits2image_projected(hdu_opt, hdu_ir, stars_opt, stars_ir, pa_deg=0, imsize=
         ax_dir, ax_rot = fig.add_subplot(spec[row_idx, 0], projection=wcs), fig.add_subplot(spec[row_idx, 1], projection=wcs)
         cx, target_npix = npix / 2, (imsize * 60) / pix
 
-        for ax, is_rot, num, c_t, c_rose, pa_val in [(ax_dir, False, n_d, c_main, "#E69F00", pa_deg), (ax_rot, True, n_r, c_rot_header, "#CC0000", (pa_deg+180)%360)]:
+        # Use row_pa for the titles instead of the global pa_deg
+        for ax, is_rot, num, c_t, c_rose, pa_val in [(ax_dir, False, n_d, c_main, "#E69F00", row_pa), (ax_rot, True, n_r, c_rot_header, "#CC0000", (row_pa+180)%360)]:
             ax.imshow(im, origin="lower", norm=norm, cmap="gray_r")
             if is_rot: 
                 ax.invert_xaxis(); ax.invert_yaxis()
@@ -251,14 +253,12 @@ def fits2image_projected(hdu_opt, hdu_ir, stars_opt, stars_ir, pa_deg=0, imsize=
                 sx, sy = wcs.world_to_pixel(SkyCoord(row.ra * u.deg, row.dec * u.deg, frame="icrs"))
                 draw_crosshair(ax_rot, sx, sy, gap=2.5/pix, arm=7.0/pix, color=colors[i], label=f"{p_rot}{i+1}", offset=3.0/pix)
                 
-                inv_EW = -row.offset_EW_arcsec
-                inv_NS = -row.offset_NS_arcsec
-                
+                # Removed offset inversion here to keep absolute sky coordinates accurate
                 y_p = y_rot_start - 0.035 - (i * 0.035)
                 ax_text.text(0.00, y_p, rf"$\bf{{{p_rot}{i+1}}}$", color=colors[i], fontsize=12)
                 ax_text.text(0.10, y_p, f"{row.mag:.1f}m", color=colors[i], fontsize=12)
-                ax_text.text(0.35, y_p, rf"$\bf{{{abs(inv_EW):.1f}''\ {'W' if inv_EW >= 0 else 'E'}}}$", color=colors[i], fontsize=12)
-                ax_text.text(0.70, y_p, rf"$\bf{{{abs(inv_NS):.1f}''\ {'S' if inv_NS >= 0 else 'N'}}}$", color=colors[i], fontsize=12)
+                ax_text.text(0.35, y_p, rf"$\bf{{{abs(row.offset_EW_arcsec):.1f}''\ {'W' if row.offset_EW_arcsec >= 0 else 'E'}}}$", color=colors[i], fontsize=12)
+                ax_text.text(0.70, y_p, rf"$\bf{{{abs(row.offset_NS_arcsec):.1f}''\ {'S' if row.offset_NS_arcsec >= 0 else 'N'}}}$", color=colors[i], fontsize=12)
             
             return y_start - 0.32 
         else:
@@ -277,12 +277,13 @@ def fits2image_projected(hdu_opt, hdu_ir, stars_opt, stars_ir, pa_deg=0, imsize=
     if hdu_opt: 
         wv_mark = hdu_opt[0].header.get('w_mark', 'Optical')
         filt_mark = "Red" if wv_mark == "DSS" else "r-band"
-        current_y_text = plot_row(hdu_opt, 0, wv_mark, filt_mark, current_y_text, stars_opt, p_dir="a", p_rot="b")
+        # Pass the original pa_deg for the optical row
+        current_y_text = plot_row(hdu_opt, 0, wv_mark, filt_mark, current_y_text, stars_opt, p_dir="a", p_rot="b", row_pa=pa_deg)
 
     # Render IR Row (Chart III & IV, Table Header in Green)
     if hdu_ir: 
-        # Pass 'c' for chart III, and 'd' for chart IV
-        current_y_text = plot_row(hdu_ir, 1, "2MASS", "J-band", current_y_text, stars_ir, p_dir="c", p_rot="d")
+        # Pass 'c' for chart III, and 'd' for chart IV. Add 90 degrees to the IR Position Angle.
+        current_y_text = plot_row(hdu_ir, 1, "2MASS", "J-band", current_y_text, stars_ir, p_dir="c", p_rot="d", row_pa=(pa_deg + 90) % 360)
         
     return fig
 
