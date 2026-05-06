@@ -33,8 +33,8 @@ The native format supporting full pipeline capabilities, including custom instru
     "object_name": "Target_A",
     "ra": "06:45:08.9",
     "dec": "-16:42:58",
-    "pa": "para",
-    "instrument": "GMOS",
+    "pa": "150",
+    "instrument": "GOODMAN",
     "fov": 4.5,
     "slit": 0.75,
     "windows": [{"start": "2026-03-22T02:00:00Z", "end": "2026-03-22T03:00:00Z"}]
