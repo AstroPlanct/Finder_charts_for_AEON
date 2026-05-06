@@ -74,4 +74,12 @@ This project was brought to life thanks to the great teamwork of:
 
 Their hard work and contributions were essential to making this tool possible!
 
+## 📝 7. Note on the Orientation of Infrared Finder Charts (Charts III and IV)
 
+When generating the finder charts, you will notice that the plots corresponding to the infrared spectrograph automatically apply an *offset* of **+90 degrees** relative to the Position Angle (PA) requested by the user. 
+
+This correction is intentional and is due to the hardware architecture of the **TripleSpec 4.1 (TS4)** instrument on the SOAR telescope. Unlike traditional optical instruments (such as Goodman) where the slit is typically aligned vertically at PA=0°, the [official NOIRLab observing guide](https://noirlab.edu/science/programs/ctio/instruments/triplespec41-nir-imaging-spectrograph/Observing-Guide) specifies that:
+
+> *"The slit for TripleSpec4 is aligned along the rows of the imaging detector."*
+
+Since the slit is oriented horizontally (along the rows, or the X-axis of the detector), applying this +90° offset in Charts III and IV ensures that the visual representation of the slit against the sky and the reference stars is mathematically accurate.
