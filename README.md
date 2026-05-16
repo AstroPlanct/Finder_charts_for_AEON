@@ -44,7 +44,7 @@ export GOOGLE_DRIVE_FOLDER_ID=<YOUR_GOOGLE_DRIVE_FOLDER_ID>
 Processes a specific local JSON or TXT file once and exits. Saves the PDFs locally.
 
 ```bash
-python run_batch.py --input-json test_targets.json --run-once --output-folder ./my_charts --max-workers 4
+python run_batch.py --input-json test_targets.txt --run-once --output-folder ./my_charts --max-workers 4
 ```
 
 ### 🧠 3. Standalone Manual Generation
